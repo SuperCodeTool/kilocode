@@ -63,6 +63,7 @@ export interface WebviewMessage {
 		| "alwaysAllowBrowser"
 		| "alwaysAllowMcp"
 		| "alwaysAllowModeSwitch"
+		| "allowedMaxRequests" // kilocode_change
 		| "alwaysAllowSubtasks"
 		| "playSound"
 		| "playTts"
@@ -142,6 +143,7 @@ export interface WebviewMessage {
 		| "downloadMcp" // kilocode_change
 		| "showSystemNotification" // kilocode_change
 		| "showAutoApproveMenu" // kilocode_change
+		| "setAllowedMaxRequests" // kilocode_change
 	text?: string
 	disabled?: boolean
 	askResponse?: ClineAskResponse

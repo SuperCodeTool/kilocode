@@ -170,6 +170,9 @@ export class Cline extends EventEmitter<ClineEvents> {
 	consecutiveMistakeCount: number = 0
 	consecutiveMistakeLimit: number
 	consecutiveMistakeCountForApplyDiff: Map<string, number> = new Map()
+	// kilocode_change start
+	private consecutiveAutoApprovedRequestsCount: number = 0
+	// kilocode_chang end
 
 	// For tracking identical consecutive tool calls
 	private toolRepetitionDetector: ToolRepetitionDetector
@@ -982,6 +985,19 @@ export class Cline extends EventEmitter<ClineEvents> {
 			this.consecutiveMistakeCount = 0
 		}
 
+		// kilocode_change start: Check if we've reached the maximum number of auto-approved requests
+		const state = await this.providerRef.deref()?.getState()
+		const maxRequests = state?.allowedMaxRequests || Infinity
+		if (this.consecutiveAutoApprovedRequestsCount >= maxRequests) {
+			await this.ask(
+				"auto_approval_max_req_reached",
+				`Kilo Code has reached the auto-approved limit of ${maxRequests.toString()} API requests. Would you like to reset the count and proceed with the task?`,
+			)
+			// If we get past the promise, it means the user approved and did not start a new task
+			this.consecutiveAutoApprovedRequestsCount = 0
+		}
+		// kilocode_change end
+
 		// Get previous api req's index to check token usage and determine if we
 		// need to truncate conversation history.
 		const previousApiReqIndex = findLastIndex(this.clineMessages, (m) => m.say === "api_req_started")
@@ -1696,6 +1712,36 @@ export class Cline extends EventEmitter<ClineEvents> {
 				break
 			}
 			case "tool_use":
+				// kilocode_change start: Add method to check if a tool should be auto-approved
+				const isToolAutoApproved = async (): Promise<boolean> => {
+					const state = await this.providerRef.deref()?.getState()
+					if (!state || !state.autoApprovalEnabled) return false
+
+					// Check specific tool auto-approval settings based on tool type
+					switch (block.name) {
+						case "read_file":
+						case "list_files":
+						case "list_code_definition_names":
+						case "search_files":
+							return !!state.alwaysAllowReadOnly
+						case "write_to_file":
+						case "apply_diff":
+						case "insert_content":
+						case "search_and_replace":
+							return !!state.alwaysAllowWrite
+						case "execute_command":
+							return !!state.alwaysAllowExecute
+						case "browser_action":
+							return !!state.alwaysAllowBrowser
+						case "use_mcp_tool":
+						case "access_mcp_resource":
+							return !!state.alwaysAllowMcp
+						default:
+							return false
+					}
+				}
+				// kilocode_change end
+
 				const toolDescription = (): string => {
 					switch (block.name) {
 						case "execute_command":
@@ -1765,6 +1811,37 @@ export class Cline extends EventEmitter<ClineEvents> {
 						text: `Tool [${block.name}] was not executed because a tool has already been used in this message. Only one tool may be used per message. You must assess the first tool's result before proceeding to use the next tool.`,
 					})
 					break
+				}
+
+				// Check if we need to show a notification about max auto-approved requests
+				const checkMaxAutoApprovedRequests = async (): Promise<boolean> => {
+					const state = await this.providerRef.deref()?.getState()
+					if (!state) return true
+
+					if (this.consecutiveAutoApprovedRequestsCount >= state.allowedMaxRequests) {
+						// Show a message to the user
+						const message = `Kilo has auto-approved ${this.consecutiveAutoApprovedRequestsCount} API requests. Would you like to reset the count and proceed with the task?`
+
+						// Use error message type since it's visible to the user
+						await this.say("error", message)
+
+						// Ask user if they want to continue
+						const didApprove = await this.ask(
+							"tool",
+							JSON.stringify({ tool: "maxRequestsConfirmation", message }),
+						)
+
+						if (didApprove) {
+							// Reset counter and continue
+							this.consecutiveAutoApprovedRequestsCount = 0
+							return true
+						} else {
+							// User chose not to continue
+							return false
+						}
+					}
+
+					return true
 				}
 
 				const pushToolResult = (content: ToolResponse) => {
@@ -1923,6 +2000,23 @@ export class Cline extends EventEmitter<ClineEvents> {
 						)
 						break
 					}
+				}
+
+				// If tool is auto-approved, increment the counter
+				const isAutoApproved = await isToolAutoApproved()
+				if (isAutoApproved) {
+					this.consecutiveAutoApprovedRequestsCount++
+				}
+
+				// Check if we've reached the max auto-approved requests limit
+				const canContinue = await checkMaxAutoApprovedRequests()
+				if (!canContinue) {
+					const state = await this.providerRef.deref()?.getState()
+					const maxRequests = state?.allowedMaxRequests || Infinity
+					pushToolResult(
+						`Tool execution was stopped because the maximum number of auto-approved requests (${maxRequests}) was reached.`,
+					)
+					break
 				}
 
 				switch (block.name) {
