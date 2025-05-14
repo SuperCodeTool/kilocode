@@ -1,5 +1,17 @@
 # kilo-code
 
+## 4.24.0
+
+### Minor Changes
+
+- Include changes from Roo Code v3.16.6
+
+### Patch Changes
+
+- [#386](https://github.com/Kilo-Org/kilocode/pull/386) [`5caba61`](https://github.com/Kilo-Org/kilocode/commit/5caba61f49a0f87dabf1e50fcf2b6111452a45e0) Thanks [@kevinvandijk](https://github.com/kevinvandijk)! - Clearly display Kilo Code recommended models
+
+- [#354](https://github.com/Kilo-Org/kilocode/pull/354) [`106b722`](https://github.com/Kilo-Org/kilocode/commit/106b722e747f98edb15b5a8e7a65e19db31028db) Thanks [@hassoncs](https://github.com/hassoncs)! - Fix wrong model after login (#213)
+
 ## 4.23.0
 
 ### Minor Changes
